@@ -15,8 +15,8 @@
     <!-- 中心定位识别框与红色十字准星 -->
     <View
         android:id="@+id/targetBox"
-        android:layout_width="240dp"
-        android:layout_height="70dp"
+        android:layout_width="260dp"
+        android:layout_height="80dp"
         android:background="#22FFFFFF"
         app:layout_constraintTop_toTopOf="@+id/viewFinder"
         app:layout_constraintBottom_toBottomOf="@+id/viewFinder"
@@ -42,11 +42,19 @@
     <LinearLayout
         android:id="@+id/bottomPanel"
         android:layout_width="match_parent"
-        android:layout_height="260dp"
+        android:layout_height="280dp"
         android:orientation="vertical"
         android:padding="12dp"
         android:background="#FFFFFF"
         app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- 新增：模式切换勾选框 -->
+        <CheckBox
+            android:id="@+id/cbNumbersOnly"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="仅提取纯数字（取消勾选则识别全部中英文文本）"
+            android:checked="false" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -71,13 +79,13 @@
             android:id="@+id/etResult"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:background="#F5F5F5"
             android:gravity="top|start"
             android:padding="8dp"
             android:textSize="16sp"
             android:textColor="#000000"
-            android:hint="识别到的数字会保存在这里（支持直接手动修改）..."
+            android:hint="识别到的文本或数字会保存在这里..."
             android:inputType="textMultiLine"
             android:scrollbars="vertical" />
     </LinearLayout>
