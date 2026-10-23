@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,7 +17,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -24,6 +25,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var viewFinder: PreviewView
     private lateinit var etResult: EditText
+    private lateinit var cbNumbersOnly: CheckBox
     private var imageCapture: ImageCapture? = null
     private lateinit var cameraExecutor: ExecutorService
 
@@ -56,16 +58,17 @@ class MainActivity : AppCompatActivity() {
 
         viewFinder = findViewById(R.id.viewFinder)
         etResult = findViewById(R.id.etResult)
+        cbNumbersOnly = findViewById(R.id.cbNumbersOnly)
         cameraExecutor = Executors.newSingleThreadExecutor()
 
         findViewById<Button>(R.id.btnScan).setOnClickListener { takePhotoAndRecognize() }
         findViewById<Button>(R.id.btnExport).setOnClickListener {
             val content = etResult.text.toString().trim()
             if (content.isEmpty()) {
-                Toast.makeText(this, "空白处还没有数字可导出", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "空白处还没有内容可导出", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            exportLauncher.launch("扫描数字_${System.currentTimeMillis()}.txt")
+            exportLauncher.launch("扫描结果_${System.currentTimeMillis()}.txt")
         }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -107,25 +110,34 @@ class MainActivity : AppCompatActivity() {
                         val matrix = Matrix().apply { postRotate(imageProxy.imageInfo.rotationDegrees.toFloat()) }
                         val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-                        // 只裁剪十字准星所在的中心区域（宽60%，高20%），防止拍到周围无关数字
-                        val cropW = (rotatedBitmap.width * 0.6).toInt()
-                        val cropH = (rotatedBitmap.height * 0.2).toInt()
+                        // 截取十字准星中心区域
+                        val cropW = (rotatedBitmap.width * 0.65).toInt()
+                        val cropH = (rotatedBitmap.height * 0.22).toInt()
                         val cropX = (rotatedBitmap.width - cropW) / 2
                         val cropY = (rotatedBitmap.height - cropH) / 2
                         val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, cropX, cropY, cropW, cropH)
 
                         val image = InputImage.fromBitmap(croppedBitmap, 0)
-                        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                        // 使用支持中文+英文+数字的识别器
+                        val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
 
                         recognizer.process(image)
                             .addOnSuccessListener { visionText ->
-                                val numbersOnly = visionText.text.replace(Regex("[^0-9]"), "")
-                                if (numbersOnly.isNotEmpty()) {
-                                    etResult.append("$numbersOnly\n")
-                                    etResult.setSelection(etResult.text.length)
-                                    Toast.makeText(this@MainActivity, "识别到: $numbersOnly", Toast.LENGTH_SHORT).show()
+                                val rawText = visionText.text.trim()
+                                // 判断是否勾选了“仅提取纯数字”
+                                val resultText = if (cbNumbersOnly.isChecked) {
+                                    rawText.replace(Regex("[^0-9]"), "")
                                 } else {
-                                    Toast.makeText(this@MainActivity, "准星处未发现数字", Toast.LENGTH_SHORT).show()
+                                    // 文本模式：将多行换行合并为空格，保证每次扫描占一行
+                                    rawText.replace(Regex("[\\r\\n]+"), " ")
+                                }
+
+                                if (resultText.isNotEmpty()) {
+                                    etResult.append("$resultText\n")
+                                    etResult.setSelection(etResult.text.length)
+                                    Toast.makeText(this@MainActivity, "识别到: $resultText", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(this@MainActivity, "准星处未发现对应内容", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             .addOnFailureListener {
