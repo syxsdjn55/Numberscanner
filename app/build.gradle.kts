@@ -36,5 +36,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
+    // 支持中英文+数字的识别库
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }
