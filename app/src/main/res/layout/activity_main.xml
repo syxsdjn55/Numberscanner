@@ -48,14 +48,14 @@
         android:background="#FFFFFF"
         app:layout_constraintBottom_toBottomOf="parent">
 
-        <!-- 新增：模式切换勾选框 -->
         <CheckBox
             android:id="@+id/cbNumbersOnly"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="仅提取纯数字（取消勾选则识别全部中英文文本）"
+            android:text="仅提取纯数字（取消勾选则识别全部中英文）"
             android:checked="false" />
 
+        <!-- 调整了按钮栏，加入历史记录按钮 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -65,14 +65,21 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="扫描识别" />
-            <Space android:layout_width="12dp" android:layout_height="wrap_content"/>
+                android:text="扫描" />
+            <Space android:layout_width="6dp" android:layout_height="wrap_content"/>
             <Button
                 android:id="@+id/btnExport"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="批量导出" />
+                android:text="导出" />
+            <Space android:layout_width="6dp" android:layout_height="wrap_content"/>
+            <Button
+                android:id="@+id/btnHistory"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="历史" />
         </LinearLayout>
 
         <EditText
