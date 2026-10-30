@@ -1,15 +1,20 @@
 package com.example.numberscanner
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Matrix
 import android.os.Bundle
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.Toast
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -18,6 +23,10 @@ import androidx.core.content.ContextCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import org.json.JSONArray
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -70,12 +79,121 @@ class MainActivity : AppCompatActivity() {
             }
             exportLauncher.launch("扫描结果_${System.currentTimeMillis()}.txt")
         }
+        
+        // 绑定历史记录按钮
+        findViewById<Button>(R.id.btnHistory).setOnClickListener { showHistoryDialog() }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             startCamera()
         } else {
             requestPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
+    }
+
+    // 存储扫码记录到本地
+    private fun saveToHistory(text: String) {
+        val prefs = getSharedPreferences("ScanHistory", Context.MODE_PRIVATE)
+        val historyList = getHistoryList()
+        val time = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+        historyList.add(0, "[$time] $text")
+        if (historyList.size > 300) historyList.removeAt(historyList.size - 1) // 最多保留300条
+        prefs.edit().putString("history_data", JSONArray(historyList).toString()).apply()
+    }
+
+    // 读取本地记录
+    private fun getHistoryList(): MutableList<String> {
+        val prefs = getSharedPreferences("ScanHistory", Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString("history_data", "[]")
+        val list = mutableListOf<String>()
+        try {
+            val jsonArray = JSONArray(jsonStr)
+            for (i in 0 until jsonArray.length()) {
+                list.add(jsonArray.getString(i))
+            }
+        } catch (e: Exception) {}
+        return list
+    }
+
+    // 弹出带有搜索和复制功能的历史记录面板
+    private fun showHistoryDialog() {
+        val historyList = getHistoryList()
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 40)
+        }
+
+        val searchInput = EditText(this).apply {
+            hint = "输入关键字查找..."
+            setSingleLine()
+        }
+        layout.addView(searchInput)
+
+        val scrollView = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0
+            ).apply {
+                weight = 1f
+                topMargin = 20
+            }
+        }
+        val listLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scrollView.addView(listLayout)
+        layout.addView(scrollView)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("历史记录 (点击即可复制)")
+            .setView(layout)
+            .setPositiveButton("关闭", null)
+            .setNegativeButton("清空全部") { _, _ ->
+                getSharedPreferences("ScanHistory", Context.MODE_PRIVATE).edit().clear().apply()
+                Toast.makeText(this, "历史已清空", Toast.LENGTH_SHORT).show()
+            }
+            .show()
+
+        val updateList: (String) -> Unit = { keyword ->
+            listLayout.removeAllViews()
+            val filtered = historyList.filter { it.contains(keyword, ignoreCase = true) }
+            if (filtered.isEmpty()) {
+                listLayout.addView(TextView(this).apply {
+                    text = "暂无记录"
+                    setPadding(0, 30, 0, 30)
+                })
+            } else {
+                for (item in filtered) {
+                    val tv = TextView(this).apply {
+                        text = item
+                        textSize = 16f
+                        setPadding(0, 35, 0, 35)
+                        setBackgroundResource(android.R.attr.selectableItemBackground)
+                        isClickable = true
+                        setOnClickListener {
+                            // 提取真实内容（剔除时间戳）
+                            val copyText = if (item.startsWith("[")) item.substringAfter("] ") else item
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("ScanResult", copyText))
+                            Toast.makeText(this@MainActivity, "已复制: $copyText", Toast.LENGTH_SHORT).show()
+                            dialog.dismiss() // 复制后自动关闭弹窗
+                        }
+                    }
+                    val divider = View(this).apply {
+                        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2)
+                        setBackgroundColor(Color.parseColor("#EEEEEE"))
+                    }
+                    listLayout.addView(tv)
+                    listLayout.addView(divider)
+                }
+            }
+        }
+
+        updateList("") // 初始显示全部
+
+        // 绑定搜索框实时过滤
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) { updateList(s.toString()) }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
     }
 
     private fun startCamera() {
@@ -110,7 +228,6 @@ class MainActivity : AppCompatActivity() {
                         val matrix = Matrix().apply { postRotate(imageProxy.imageInfo.rotationDegrees.toFloat()) }
                         val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 
-                        // 截取十字准星中心区域
                         val cropW = (rotatedBitmap.width * 0.65).toInt()
                         val cropH = (rotatedBitmap.height * 0.22).toInt()
                         val cropX = (rotatedBitmap.width - cropW) / 2
@@ -118,23 +235,22 @@ class MainActivity : AppCompatActivity() {
                         val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, cropX, cropY, cropW, cropH)
 
                         val image = InputImage.fromBitmap(croppedBitmap, 0)
-                        // 使用支持中文+英文+数字的识别器
                         val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
 
                         recognizer.process(image)
                             .addOnSuccessListener { visionText ->
                                 val rawText = visionText.text.trim()
-                                // 判断是否勾选了“仅提取纯数字”
                                 val resultText = if (cbNumbersOnly.isChecked) {
                                     rawText.replace(Regex("[^0-9]"), "")
                                 } else {
-                                    // 文本模式：将多行换行合并为空格，保证每次扫描占一行
                                     rawText.replace(Regex("[\\r\\n]+"), " ")
                                 }
 
                                 if (resultText.isNotEmpty()) {
                                     etResult.append("$resultText\n")
                                     etResult.setSelection(etResult.text.length)
+                                    // 保存到历史记录
+                                    saveToHistory(resultText)
                                     Toast.makeText(this@MainActivity, "识别到: $resultText", Toast.LENGTH_SHORT).show()
                                 } else {
                                     Toast.makeText(this@MainActivity, "准星处未发现对应内容", Toast.LENGTH_SHORT).show()
